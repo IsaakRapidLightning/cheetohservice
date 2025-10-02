@@ -67,7 +67,7 @@ function getPublicUsers() {
         username: u.username, 
         color: u.color, 
         isAdmin: !!u.isAdmin,
-        profilePicture: userProfiles.get(u.id)?.profilePicture || null
+        profilePicture: userProfiles.get(u.id)?.profilePicture || '/cheetoh.png'
     }));
 }
 
@@ -104,6 +104,7 @@ const commands = {
         if (!user.isAdmin) return { type: 'error', text: 'Admin privileges required' };
         cheetohPartyActive = true;
         setTimeout(() => { cheetohPartyActive = false; }, 10000); // 10 second party
+        io.emit('command:cheetohparty', { duration: 10000 });
         return { type: 'cheetohparty', duration: 10000 };
     },
     '/requestadmin': (user, args) => {
@@ -198,7 +199,7 @@ io.on('connection', (socket) => {
             username: user.username, 
             color: user.color, 
             isAdmin: user.isAdmin,
-            profilePicture: userProfiles.get(user.id)?.profilePicture || null
+            profilePicture: userProfiles.get(user.id)?.profilePicture || '/cheetoh.png'
         },
         messages,
         users: getPublicUsers(),
@@ -235,7 +236,7 @@ io.on('connection', (socket) => {
             username: u.username, 
             color: u.color, 
             isAdmin: u.isAdmin,
-            profilePicture: userProfiles.get(u.id)?.profilePicture || null
+            profilePicture: userProfiles.get(u.id)?.profilePicture || '/cheetoh.png'
         });
     });
 
@@ -318,7 +319,7 @@ io.on('connection', (socket) => {
             color: u.color,
             userId: u.id,
             isAdmin: !!u.isAdmin,
-            profilePicture: userProfiles.get(u.id)?.profilePicture || null,
+            profilePicture: userProfiles.get(u.id)?.profilePicture || '/cheetoh.png',
             timestamp: Date.now()
         };
         console.log('Message created with profilePicture:', message.profilePicture);
@@ -338,7 +339,7 @@ io.on('connection', (socket) => {
             color: u.color,
             userId: u.id,
             isAdmin: !!u.isAdmin,
-            profilePicture: userProfiles.get(u.id)?.profilePicture || null,
+            profilePicture: userProfiles.get(u.id)?.profilePicture || '/cheetoh.png',
             timestamp: Date.now(),
             type: 'file',
             fileUrl: fileData.url,
@@ -551,15 +552,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
         size: req.file.size
     });
     
-    // Delete file after 5 seconds (gives time for client to load it)
-    setTimeout(() => {
-        try {
-            fs.unlinkSync(req.file.path);
-            console.log('File deleted:', req.file.filename);
-        } catch (err) {
-            console.log('Error deleting file:', err.message);
-        }
-    }, 5000);
+    // Files are now stored permanently on server
 });
 
 // Profile picture upload endpoint
@@ -575,15 +568,7 @@ app.post('/upload-profile', upload.single('profile'), (req, res) => {
         size: req.file.size
     });
     
-    // Delete profile picture after 10 seconds (longer for profile pics)
-    setTimeout(() => {
-        try {
-            fs.unlinkSync(req.file.path);
-            console.log('Profile picture deleted:', req.file.filename);
-        } catch (err) {
-            console.log('Error deleting profile picture:', err.message);
-        }
-    }, 10000);
+    // Profile pictures are now stored permanently on server
 });
 
 // File cleanup endpoint (admin only)

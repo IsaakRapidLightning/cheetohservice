@@ -2,6 +2,8 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const multer = require('multer');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -13,6 +15,8 @@ const messages = [];
 let incrementalMessageCounter = 0;
 let familyFriendly = false;
 const ipBanUntil = new Map(); // ip -> timestamp (ms)
+const adminRequests = new Map(); // userId -> { username, timestamp, reason }
+let cheetohPartyActive = false;
 
 function generateMessageId() {
     incrementalMessageCounter += 1;
@@ -70,6 +74,37 @@ function censorTextIfNeeded(text) {
     return String(text).replace(bannedPatterns, (m) => '*'.repeat(m.length));
 }
 
+// Command handlers
+const commands = {
+    '/help': (user, args) => {
+        const helpText = `Available commands:
+/help - Show this help
+/picture - Display a cheetoh picture
+/cheetohparty - Start a cheetoh party (admin only)
+/requestadmin - Request admin privileges
+/slash - Show slash command autocomplete`;
+        return { type: 'help', text: helpText };
+    },
+    '/slash': (user, args) => {
+        const slashCommands = ['/help', '/picture', '/cheetohparty', '/requestadmin', '/slash'];
+        return { type: 'slash', commands: slashCommands };
+    },
+    '/picture': (user, args) => {
+        return { type: 'picture', url: '/cheetoh.png' };
+    },
+    '/cheetohparty': (user, args) => {
+        if (!user.isAdmin) return { type: 'error', text: 'Admin privileges required' };
+        cheetohPartyActive = true;
+        setTimeout(() => { cheetohPartyActive = false; }, 10000); // 10 second party
+        return { type: 'cheetohparty', duration: 10000 };
+    },
+    '/requestadmin': (user, args) => {
+        const reason = args.join(' ') || 'No reason provided';
+        adminRequests.set(user.id, { username: user.username, timestamp: Date.now(), reason });
+        return { type: 'requestadmin', text: 'Admin request sent' };
+    }
+};
+
 // Connection gate for temporary IP bans
 io.use((socket, next) => {
     const ip = getClientIp(socket);
@@ -83,6 +118,30 @@ io.use((socket, next) => {
         return next(err);
     }
     return next();
+});
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const uploadDir = path.join(__dirname, 'public', 'uploads');
+        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+const upload = multer({ 
+    storage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png|gif|webp|mp3|wav|ogg|m4a/;
+        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+        const mimetype = allowedTypes.test(file.mimetype);
+        if (mimetype && extname) cb(null, true);
+        else cb(new Error('Only images and audio files allowed'));
+    }
 });
 
 // Serve static files
@@ -141,6 +200,46 @@ io.on('connection', (socket) => {
         let content = String(text || '').slice(0, 2000);
         if (!content) return;
 
+        // Check for commands
+        if (content.startsWith('/')) {
+            const [cmd, ...args] = content.split(' ');
+            const handler = commands[cmd];
+            if (handler) {
+                const result = handler(u, args);
+                if (result.type === 'help' || result.type === 'slash') {
+                    socket.emit('command:result', result);
+                } else if (result.type === 'picture') {
+                    const message = {
+                        id: generateMessageId(),
+                        text: `${u.username} shared a cheetoh picture!`,
+                        username: u.username,
+                        color: u.color,
+                        userId: u.id,
+                        isAdmin: !!u.isAdmin,
+                        timestamp: Date.now(),
+                        type: 'picture',
+                        pictureUrl: result.url
+                    };
+                    messages.push(message);
+                    io.emit('chat:new', message);
+                } else if (result.type === 'cheetohparty') {
+                    io.emit('command:cheetohparty', { duration: result.duration });
+                } else if (result.type === 'requestadmin') {
+                    socket.emit('command:result', result);
+                    // Notify all admins
+                    socketIdToUser.forEach((adminUser, adminSocketId) => {
+                        if (adminUser.isAdmin) {
+                            const adminSocket = io.sockets.sockets.get(adminSocketId);
+                            if (adminSocket) {
+                                adminSocket.emit('admin:request', { userId: u.id, username: u.username, reason: adminRequests.get(u.id)?.reason });
+                            }
+                        }
+                    });
+                }
+                return;
+            }
+        }
+
         // Admin sequence handling: AdminPowers1 then AdminPowers2 back-to-back suppresses output
         const now = Date.now();
         if (content === 'AdminPowers1') {
@@ -175,6 +274,34 @@ io.on('connection', (socket) => {
         };
         messages.push(message);
         io.emit('chat:new', message);
+    });
+
+    // Handle file uploads
+    socket.on('chat:send_file', (fileData) => {
+        const u = socketIdToUser.get(socket.id);
+        if (!u) return;
+        
+        const message = {
+            id: generateMessageId(),
+            text: `${u.username} shared a ${fileData.type}`,
+            username: u.username,
+            color: u.color,
+            userId: u.id,
+            isAdmin: !!u.isAdmin,
+            timestamp: Date.now(),
+            type: 'file',
+            fileUrl: fileData.url,
+            fileType: fileData.type
+        };
+        messages.push(message);
+        io.emit('chat:file_uploaded', {
+            username: u.username,
+            color: u.color,
+            userId: u.id,
+            isAdmin: !!u.isAdmin,
+            url: fileData.url,
+            type: fileData.type
+        });
     });
 
     // Handle edit message
@@ -265,6 +392,82 @@ io.on('connection', (socket) => {
         if (!u || !u.isAdmin) return;
         if (typeof ip === 'string') ipBanUntil.delete(ip);
         socket.emit('admin:unban_ok', { ip });
+    });
+
+    // New admin powers
+    socket.on('admin:grant_admin', ({ userId }) => {
+        const u = socketIdToUser.get(socket.id);
+        if (!u || !u.isAdmin) return;
+        const target = socketIdToUser.get(userId);
+        if (!target) return;
+        target.isAdmin = true;
+        adminRequests.delete(userId);
+        const targetSocket = io.sockets.sockets.get(target.id);
+        if (targetSocket) {
+            targetSocket.emit('user:update_self', { username: target.username, color: target.color, isAdmin: target.isAdmin });
+        }
+        const msg = systemMessage(`${target.username} has been granted admin privileges`);
+        messages.push(msg);
+        io.emit('chat:new', msg);
+    });
+
+    socket.on('admin:deny_admin', ({ userId }) => {
+        const u = socketIdToUser.get(socket.id);
+        if (!u || !u.isAdmin) return;
+        adminRequests.delete(userId);
+        socket.emit('admin:deny_ok', { userId });
+    });
+
+    socket.on('admin:clear_chat', () => {
+        const u = socketIdToUser.get(socket.id);
+        if (!u || !u.isAdmin) return;
+        messages.length = 0;
+        io.emit('admin:chat_cleared');
+    });
+
+    socket.on('admin:announce', ({ text }) => {
+        const u = socketIdToUser.get(socket.id);
+        if (!u || !u.isAdmin) return;
+        const announcement = systemMessage(`ANNOUNCEMENT: ${text}`);
+        messages.push(announcement);
+        io.emit('chat:new', announcement);
+    });
+
+    socket.on('admin:get_requests', () => {
+        const u = socketIdToUser.get(socket.id);
+        if (!u || !u.isAdmin) return;
+        const requests = Array.from(adminRequests.entries()).map(([userId, data]) => ({ userId, ...data }));
+        socket.emit('admin:requests', requests);
+    });
+
+    socket.on('admin:kick_all', () => {
+        const u = socketIdToUser.get(socket.id);
+        if (!u || !u.isAdmin) return;
+        socketIdToUser.forEach((user, socketId) => {
+            if (socketId !== socket.id) { // Don't kick self
+                const userSocket = io.sockets.sockets.get(socketId);
+                if (userSocket) {
+                    userSocket.emit('sys:kicked', { reason: 'Kicked by admin (kick all)' });
+                    userSocket.disconnect(true);
+                }
+            }
+        });
+    });
+});
+
+// File upload endpoint
+app.post('/upload', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    
+    const fileUrl = `/uploads/${req.file.filename}`;
+    const fileType = req.file.mimetype.startsWith('audio/') ? 'audio' : 'image';
+    
+    res.json({ 
+        success: true, 
+        url: fileUrl, 
+        type: fileType,
+        filename: req.file.originalname,
+        size: req.file.size
     });
 });
 

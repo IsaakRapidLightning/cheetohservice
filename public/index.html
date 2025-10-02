@@ -154,6 +154,77 @@
   }
   .composer input:disabled { opacity: .5; cursor: not-allowed; }
   .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .upload-btn {
+    background: linear-gradient(180deg, var(--cheetoh-orange), var(--cheetoh-deep));
+    color: #111827;
+    border: none;
+    padding: 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 16px;
+    min-width: 44px;
+  }
+  .upload-btn:hover { opacity: 0.9; }
+  .upload-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .file-input { display: none; }
+  .command-help {
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin: 4px 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .cheetoh-party {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1000;
+  }
+  .cheetoh-emoji {
+    position: absolute;
+    font-size: 24px;
+    animation: cheetohFloat 3s linear infinite;
+  }
+  @keyframes cheetohFloat {
+    0% { transform: translateY(100vh) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(-100px) rotate(360deg); opacity: 0; }
+  }
+  .message-image {
+    max-width: 200px;
+    max-height: 200px;
+    border-radius: 8px;
+    margin: 4px 0;
+    cursor: pointer;
+  }
+  .message-audio {
+    width: 100%;
+    max-width: 300px;
+    margin: 4px 0;
+  }
+  .admin-requests {
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 8px;
+    padding: 8px;
+    margin: 8px 0;
+  }
+  .request-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 8px;
+    margin: 4px 0;
+    background: rgba(255,255,255,.03);
+    border-radius: 6px;
+    font-size: 12px;
+  }
   .badge { padding: 2px 6px; border-radius: 6px; font-weight: 700; font-size: 11px; }
   .badge.admin { background: linear-gradient(180deg, #fde68a, #f59e0b); color: #3b2800; }
   .system { opacity: .85; font-style: italic; border-left-color: #475569 !important; }
@@ -207,6 +278,24 @@
         <div class="admin-tools">
           <button class="btn" id="loadHistoryBtn">Load last 200</button>
         </div>
+        <div style="height:8px"></div>
+        <div style="font-size:12px;color:var(--muted)">Admin requests:</div>
+        <div class="admin-tools">
+          <button class="btn" id="loadRequestsBtn">Load Requests</button>
+        </div>
+        <div id="adminRequests" class="admin-requests"></div>
+        <div style="height:8px"></div>
+        <div style="font-size:12px;color:var(--muted)">Power actions:</div>
+        <div class="admin-tools">
+          <button class="btn" id="clearChatBtn">Clear Chat</button>
+          <button class="btn" id="kickAllBtn">Kick All</button>
+        </div>
+        <div style="height:8px"></div>
+        <div style="font-size:12px;color:var(--muted)">Announcement:</div>
+        <div class="admin-tools">
+          <input id="announceInput" placeholder="Announcement text" style="flex:1;background:#0b0b0c;color:var(--text);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:6px 8px;" />
+          <button class="btn" id="announceBtn">Announce</button>
+        </div>
       </div>
 
       <div style="height:10px"></div>
@@ -220,6 +309,8 @@
     </div>
     <div class="composer">
 <input id="messageInput" autocomplete="off" placeholder="Type your message..."/>
+      <button class="upload-btn" id="uploadBtn" title="Upload file">+</button>
+      <input type="file" id="fileInput" class="file-input" accept="image/*,audio/*" />
       <button class="btn" id="sendBtn">Send</button>
     </div>
   </section>
@@ -259,6 +350,14 @@
   const banDuration = document.getElementById('banDuration');
   const kickBtn = document.getElementById('kickBtn');
   const loadHistoryBtn = document.getElementById('loadHistoryBtn');
+  const loadRequestsBtn = document.getElementById('loadRequestsBtn');
+  const adminRequests = document.getElementById('adminRequests');
+  const clearChatBtn = document.getElementById('clearChatBtn');
+  const kickAllBtn = document.getElementById('kickAllBtn');
+  const announceInput = document.getElementById('announceInput');
+  const announceBtn = document.getElementById('announceBtn');
+  const uploadBtn = document.getElementById('uploadBtn');
+  const fileInput = document.getElementById('fileInput');
 
   let selfUser = { id: null, username: 'Guest', color: '#fff', isAdmin: false };
   let gateActive = true;
@@ -328,6 +427,32 @@
 
     wrapper.appendChild(meta);
     wrapper.appendChild(text);
+    
+    // Handle special message types
+    if(message.type === 'picture' && message.pictureUrl){
+      const img = document.createElement('img');
+      img.src = message.pictureUrl;
+      img.className = 'message-image';
+      img.onclick = () => window.open(message.pictureUrl, '_blank');
+      wrapper.appendChild(img);
+    }
+    
+    if(message.type === 'file' && message.fileUrl){
+      if(message.fileType === 'image'){
+        const img = document.createElement('img');
+        img.src = message.fileUrl;
+        img.className = 'message-image';
+        img.onclick = () => window.open(message.fileUrl, '_blank');
+        wrapper.appendChild(img);
+      } else if(message.fileType === 'audio'){
+        const audio = document.createElement('audio');
+        audio.src = message.fileUrl;
+        audio.controls = true;
+        audio.className = 'message-audio';
+        wrapper.appendChild(audio);
+      }
+    }
+    
     if(actions.childNodes.length) wrapper.appendChild(actions);
     return wrapper;
   }
@@ -389,6 +514,7 @@
     gateActive = false;
     input.disabled = false;
     sendBtn.disabled = false;
+    uploadBtn.disabled = false;
   }
   enterBtn.onclick = enterChat;
   gateUsername.addEventListener('keypress', e => { if(e.key === 'Enter') enterChat(); });
@@ -396,6 +522,42 @@
   // initially disable composer until name is set
   input.disabled = true;
   sendBtn.disabled = true;
+  uploadBtn.disabled = true;
+
+  socket.on('sys:kicked', ({ reason }) => {
+    alert(reason || 'Kicked');
+  });
+  
+  // Global functions for admin actions
+  window.grantAdmin = (userId) => {
+    socket.emit('admin:grant_admin', { userId });
+  };
+  window.denyAdmin = (userId) => {
+    socket.emit('admin:deny_admin', { userId });
+  };
+  
+  // Cheetoh party effect
+  function startCheetohParty(duration) {
+    const partyDiv = document.createElement('div');
+    partyDiv.className = 'cheetoh-party';
+    document.body.appendChild(partyDiv);
+    
+    const interval = setInterval(() => {
+      const cheetoh = document.createElement('div');
+      cheetoh.className = 'cheetoh-emoji';
+      cheetoh.textContent = '🐆';
+      cheetoh.style.left = Math.random() * 100 + '%';
+      cheetoh.style.animationDelay = Math.random() * 2 + 's';
+      partyDiv.appendChild(cheetoh);
+      
+      setTimeout(() => cheetoh.remove(), 3000);
+    }, 200);
+    
+    setTimeout(() => {
+      clearInterval(interval);
+      partyDiv.remove();
+    }, duration);
+  }
 
   sendBtn.onclick = sendMessage;
   input.addEventListener('keypress', e => { if(e.key === 'Enter') sendMessage(); });
@@ -416,6 +578,70 @@
   });
   loadHistoryBtn?.addEventListener('click', () => {
     socket.emit('admin:get_history', { limit: 200 });
+  });
+  loadRequestsBtn?.addEventListener('click', () => {
+    socket.emit('admin:get_requests');
+  });
+  clearChatBtn?.addEventListener('click', () => {
+    if(confirm('Clear all chat messages?')) {
+      socket.emit('admin:clear_chat');
+    }
+  });
+  kickAllBtn?.addEventListener('click', () => {
+    if(confirm('Kick all users?')) {
+      socket.emit('admin:kick_all');
+    }
+  });
+  announceBtn?.addEventListener('click', () => {
+    const text = announceInput.value.trim();
+    if(text) {
+      socket.emit('admin:announce', { text });
+      announceInput.value = '';
+    }
+  });
+  announceInput?.addEventListener('keypress', (e) => {
+    if(e.key === 'Enter') announceBtn.click();
+  });
+  
+  // File upload
+  uploadBtn?.addEventListener('click', () => {
+    if(gateActive) return;
+    fileInput.click();
+  });
+  fileInput?.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    
+    // Check file size (1 minute audio limit)
+    if(file.type.startsWith('audio/') && file.size > 10 * 1024 * 1024) {
+      alert('Audio files must be under 10MB (approximately 1 minute)');
+      return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    fetch('/upload', {
+      method: 'POST',
+      body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+      if(data.success) {
+        socket.emit('chat:send_file', {
+          url: data.url,
+          type: data.type,
+          filename: data.filename
+        });
+      } else {
+        alert('Upload failed: ' + (data.error || 'Unknown error'));
+      }
+    })
+    .catch(err => {
+      alert('Upload failed: ' + err.message);
+    });
+    
+    fileInput.value = '';
   });
 
   function refreshPresence(users){
@@ -527,8 +753,76 @@
     messagesEl.innerHTML = '';
     renderAll(arr);
   });
-  socket.on('sys:kicked', ({ reason }) => {
-    alert(reason || 'Kicked');
+  socket.on('command:result', (result) => {
+    if(result.type === 'help') {
+      const helpDiv = document.createElement('div');
+      helpDiv.className = 'command-help';
+      helpDiv.textContent = result.text;
+      messagesEl.appendChild(helpDiv);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    } else if(result.type === 'slash') {
+      const slashDiv = document.createElement('div');
+      slashDiv.className = 'command-help';
+      slashDiv.textContent = 'Available commands: ' + result.commands.join(', ');
+      messagesEl.appendChild(slashDiv);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    } else if(result.type === 'requestadmin') {
+      const reqDiv = document.createElement('div');
+      reqDiv.className = 'command-help';
+      reqDiv.textContent = result.text;
+      messagesEl.appendChild(reqDiv);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+  });
+  
+  socket.on('command:cheetohparty', ({ duration }) => {
+    startCheetohParty(duration);
+  });
+  
+  socket.on('admin:request', ({ userId, username, reason }) => {
+    if(!selfUser.isAdmin) return;
+    const reqDiv = document.createElement('div');
+    reqDiv.className = 'command-help';
+    reqDiv.innerHTML = `Admin request from ${username}: ${reason} <button class='linklike' onclick='grantAdmin("${userId}")'>Grant</button> <button class='linklike' onclick='denyAdmin("${userId}")'>Deny</button>`;
+    messagesEl.appendChild(reqDiv);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  });
+  
+  socket.on('admin:requests', (requests) => {
+    if(!adminRequests) return;
+    adminRequests.innerHTML = '';
+    requests.forEach(req => {
+      const item = document.createElement('div');
+      item.className = 'request-item';
+      item.innerHTML = `
+        <div>${req.username}: ${req.reason}</div>
+        <div>
+          <button class='linklike' onclick='grantAdmin("${req.userId}")'>Grant</button>
+          <button class='linklike' onclick='denyAdmin("${req.userId}")'>Deny</button>
+        </div>
+      `;
+      adminRequests.appendChild(item);
+    });
+  });
+  
+  socket.on('admin:chat_cleared', () => {
+    messagesEl.innerHTML = '';
+  });
+  
+  socket.on('chat:file_uploaded', (data) => {
+    const message = {
+      id: 'file_' + Date.now(),
+      text: `${data.username} shared a ${data.fileType}`,
+      username: data.username,
+      color: data.color,
+      userId: data.userId,
+      isAdmin: data.isAdmin,
+      timestamp: Date.now(),
+      type: 'file',
+      fileUrl: data.url,
+      fileType: data.type
+    };
+    appendOne(message);
   });
 </script>
 </body>

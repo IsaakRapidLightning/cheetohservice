@@ -2,42 +2,335 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>CheetohService Chat</title>
 <style>
-  body { font-family: Arial; }
-  ul { list-style: none; padding: 0; }
-  li { padding: 5px 0; }
-  #messages { height: 300px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; }
+  :root {
+    --cheetoh-orange: #f97316;
+    --cheetoh-deep: #ea580c;
+    --cheetoh-light: #ffedd5;
+    --bg-dark: #0f0f0f;
+    --card: #18181b;
+    --text: #f8fafc;
+    --muted: #cbd5e1;
+    --accent: #fde68a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    color: var(--text);
+    background: radial-gradient(1200px 600px at 20% -20%, rgba(249,115,22,.25), transparent 60%),
+                radial-gradient(1000px 800px at 120% 20%, rgba(234,88,12,.15), transparent 60%),
+                var(--bg-dark);
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: linear-gradient(90deg, var(--cheetoh-deep), var(--cheetoh-orange));
+    color: #111827;
+    font-weight: 800;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+  }
+  header .logo {
+    width: 28px;
+    height: 28px;
+    background: conic-gradient(from 0deg, var(--cheetoh-light), var(--cheetoh-orange), var(--cheetoh-deep));
+    border-radius: 8px 100px 8px 100px;
+    box-shadow: 0 0 0 3px rgba(0,0,0,.15) inset, 0 8px 24px rgba(0,0,0,.3);
+  }
+  main {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 16px;
+    padding: 16px;
+  }
+  .sidebar {
+    background: var(--card);
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 12px;
+    padding: 12px;
+  }
+  .panel-title {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    margin: 4px 0 10px;
+  }
+  .username-row { display: flex; gap: 8px; }
+  .username-row input {
+    flex: 1;
+    background: #0b0b0c;
+    color: var(--text);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+  .btn {
+    background: linear-gradient(180deg, var(--cheetoh-orange), var(--cheetoh-deep));
+    color: #111827;
+    border: none;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 700;
+  }
+  .content {
+    display: grid;
+    grid-template-rows: 1fr auto;
+    gap: 12px;
+  }
+  .chat {
+    background: var(--card);
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 12px;
+    padding: 12px;
+    display: grid;
+    grid-template-rows: 1fr;
+  }
+  #messages {
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 60vh;
+  }
+  .bubble {
+    display: grid;
+    gap: 4px;
+    border-left: 4px solid transparent;
+    background: rgba(255,255,255,.03);
+    padding: 8px 10px;
+    border-radius: 8px;
+  }
+  .bubble .meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .bubble .text { font-size: 15px; white-space: pre-wrap; word-break: break-word; }
+  .bubble .actions { display: flex; gap: 6px; }
+  .linklike { background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 12px; }
+  .composer {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .composer input {
+    flex: 1;
+    background: #0b0b0c;
+    color: var(--text);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .badge { padding: 2px 6px; border-radius: 6px; font-weight: 700; font-size: 11px; }
+  .badge.admin { background: linear-gradient(180deg, #fde68a, #f59e0b); color: #3b2800; }
+  .system { opacity: .85; font-style: italic; border-left-color: #475569 !important; }
+  footer { padding: 10px 16px; color: var(--muted); font-size: 12px; }
+
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
-<h1>CheetohService Chat</h1>
+<header>
+  <div class="logo"></div>
+  <div>CheetohService Chat</div>
+  <div id="selfBadge" style="margin-left:auto" class="badge">Guest</div>
+  <div id="adminBadge" class="badge admin" style="display:none; margin-left:8px;">Admin</div>
+  <div style="width:8px"></div>
+</header>
+<main>
+  <aside class="sidebar">
+    <div class="panel-title">Profile</div>
+    <div class="username-row">
+      <input id="usernameInput" maxlength="24" placeholder="Set username" />
+      <button class="btn" id="saveUsername">Save</button>
+    </div>
+    <div style="height:10px"></div>
+    <div style="font-size:12px;color:var(--muted)">Your color is derived from your IP.</div>
+  </aside>
+  <section class="content">
+    <div class="chat">
 <div id="messages"></div>
+    </div>
+    <div class="composer">
 <input id="messageInput" autocomplete="off" placeholder="Type your message..."/>
-<button onclick="sendMessage()">Send</button>
+      <button class="btn" id="sendBtn">Send</button>
+    </div>
+  </section>
+</main>
+<footer>
+  Type "AdminPowers1" then "AdminPowers2" back-to-back to unlock admin (hidden).
+</footer>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
   const socket = io();
-  const messagesDiv = document.getElementById('messages');
+  const messagesEl = document.getElementById('messages');
   const input = document.getElementById('messageInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const usernameInput = document.getElementById('usernameInput');
+  const saveUsername = document.getElementById('saveUsername');
+  const selfBadge = document.getElementById('selfBadge');
+  const adminBadge = document.getElementById('adminBadge');
 
-  socket.on('chat message', msg => {
-    const item = document.createElement('div');
-    item.textContent = msg;
-    messagesDiv.appendChild(item);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-  });
+  let selfUser = { id: null, username: 'Guest', color: '#fff', isAdmin: false };
 
-  function sendMessage() {
-    if(input.value){
-      socket.emit('chat message', input.value);
-      input.value = '';
+  function setSelf(user){
+    selfUser = { ...selfUser, ...user };
+    selfBadge.textContent = selfUser.username;
+    selfBadge.style.background = selfUser.color;
+    selfBadge.style.color = '#111827';
+    adminBadge.style.display = selfUser.isAdmin ? 'inline-block' : 'none';
+  }
+
+  function createMessageEl(message){
+    const wrapper = document.createElement('div');
+    wrapper.className = 'bubble' + (message.system ? ' system' : '');
+    wrapper.dataset.id = message.id;
+    wrapper.style.borderLeftColor = message.color || 'transparent';
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const name = document.createElement('span');
+    name.textContent = message.username;
+    name.style.color = message.color || 'var(--muted)';
+    const time = document.createElement('span');
+    const dt = new Date(message.timestamp || Date.now());
+    time.textContent = '• ' + dt.toLocaleTimeString();
+    meta.appendChild(name);
+    if(message.userId === selfUser.id){
+      const me = document.createElement('span');
+      me.textContent = '(you)';
+      me.style.opacity = .7;
+      meta.appendChild(me);
+    }
+    if(selfUser.isAdmin && !message.system){
+      const badge = document.createElement('span');
+      badge.className = 'badge admin';
+      badge.textContent = 'admin';
+      meta.appendChild(badge);
+    }
+    meta.appendChild(time);
+
+    const text = document.createElement('div');
+    text.className = 'text';
+    text.textContent = message.text;
+
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    if(!message.system && (selfUser.isAdmin || message.userId === selfUser.id)){
+      const editBtn = document.createElement('button');
+      editBtn.className = 'linklike';
+      editBtn.textContent = 'Edit';
+      editBtn.onclick = () => beginEdit(wrapper, message);
+      const delBtn = document.createElement('button');
+      delBtn.className = 'linklike';
+      delBtn.textContent = 'Delete';
+      delBtn.onclick = () => deleteMessage(message.id);
+      actions.appendChild(editBtn);
+      actions.appendChild(delBtn);
+    }
+
+    wrapper.appendChild(meta);
+    wrapper.appendChild(text);
+    if(actions.childNodes.length) wrapper.appendChild(actions);
+    return wrapper;
+  }
+
+  function renderAll(msgs){
+    messagesEl.innerHTML = '';
+    msgs.forEach(m => messagesEl.appendChild(createMessageEl(m)));
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function appendOne(m){
+    messagesEl.appendChild(createMessageEl(m));
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function beginEdit(wrapper, message){
+    const textEl = wrapper.querySelector('.text');
+    const original = message.text;
+    const input = document.createElement('input');
+    input.value = original;
+    input.style.width = '100%';
+    input.onkeydown = (e) => {
+      if(e.key === 'Enter') finish();
+      if(e.key === 'Escape') cancel();
+    };
+    textEl.replaceWith(input);
+    input.focus();
+
+    function finish(){
+      const newText = input.value.trim();
+      if(!newText) return cancel();
+      socket.emit('chat:edit', { id: message.id, newText });
+    }
+    function cancel(){
+      input.replaceWith(textEl);
     }
   }
 
-  input.addEventListener('keypress', e => {
-    if(e.key === 'Enter') sendMessage();
+  function deleteMessage(id){
+    socket.emit('chat:delete', { id });
+  }
+
+  function sendMessage(){
+    const val = input.value.trim();
+    if(!val) return;
+    socket.emit('chat:send', val);
+    input.value = '';
+  }
+
+  sendBtn.onclick = sendMessage;
+  input.addEventListener('keypress', e => { if(e.key === 'Enter') sendMessage(); });
+  saveUsername.onclick = () => {
+    const val = usernameInput.value.trim();
+    if(!val) return;
+    socket.emit('user:set_username', val);
+  };
+
+  // socket events
+  socket.on('init', (payload) => {
+    setSelf(payload.self);
+    usernameInput.value = payload.self.username || '';
+    renderAll(payload.messages || []);
+  });
+  socket.on('user:update_self', (payload) => {
+    setSelf(payload);
+  });
+  socket.on('chat:new', (m) => {
+    appendOne(m);
+  });
+  socket.on('chat:edited', ({ id, text, editedAt }) => {
+    const node = [...messagesEl.children].find(n => n.dataset.id === id);
+    if(!node) return;
+    const textEl = node.querySelector('.text');
+    if(textEl){ textEl.textContent = text; }
+    const meta = node.querySelector('.meta');
+    if(meta){
+      const tag = document.createElement('span');
+      tag.textContent = ' (edited)';
+      tag.style.opacity = .7;
+      meta.appendChild(tag);
+    }
+  });
+  socket.on('chat:deleted', ({ id }) => {
+    const node = [...messagesEl.children].find(n => n.dataset.id === id);
+    if(node) node.remove();
   });
 </script>
 </body>

@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" href="/cheetoh.png" type="image/png" />
 <title>CheetohService Chat</title>
 <style>
   :root {
@@ -41,13 +42,13 @@
   header .logo {
     width: 28px;
     height: 28px;
-    background: conic-gradient(from 0deg, var(--cheetoh-light), var(--cheetoh-orange), var(--cheetoh-deep));
-    border-radius: 8px 100px 8px 100px;
-    box-shadow: 0 0 0 3px rgba(0,0,0,.15) inset, 0 8px 24px rgba(0,0,0,.3);
+    background: url('/cheetoh.png') center/cover no-repeat;
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.3);
   }
   main {
     display: grid;
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 300px 1fr;
     gap: 16px;
     padding: 16px;
   }
@@ -57,6 +58,15 @@
     border-radius: 12px;
     padding: 12px;
   }
+  .admin-section { margin-top: 16px; padding-top: 12px; border-top: 1px dashed rgba(255,255,255,.08); }
+  .switch {
+    position: relative; display: inline-block; width: 46px; height: 24px; vertical-align: middle;
+  }
+  .switch input { display:none; }
+  .slider { position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#374151; transition:.2s; border-radius:999px; }
+  .slider:before { position:absolute; content:""; height:18px; width:18px; left:3px; bottom:3px; background:white; transition:.2s; border-radius:999px; }
+  input:checked + .slider { background: linear-gradient(180deg, var(--cheetoh-orange), var(--cheetoh-deep)); }
+  input:checked + .slider:before { transform: translateX(22px); }
   .panel-title {
     font-size: 12px;
     color: var(--muted);
@@ -120,6 +130,15 @@
   .bubble .text { font-size: 15px; white-space: pre-wrap; word-break: break-word; }
   .bubble .actions { display: flex; gap: 6px; }
   .linklike { background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 12px; }
+  .admin-tools { display:flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .admin-panel {
+    margin-top: 12px;
+    background: rgba(255,255,255,.03);
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .user-list { display:flex; flex-direction:column; gap:8px; max-height: 200px; overflow:auto; }
   .composer {
     display: flex;
     gap: 8px;
@@ -133,6 +152,8 @@
     border-radius: 10px;
     padding: 12px 14px;
   }
+  .composer input:disabled { opacity: .5; cursor: not-allowed; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
   .badge { padding: 2px 6px; border-radius: 6px; font-weight: 700; font-size: 11px; }
   .badge.admin { background: linear-gradient(180deg, #fde68a, #f59e0b); color: #3b2800; }
   .system { opacity: .85; font-style: italic; border-left-color: #475569 !important; }
@@ -160,6 +181,38 @@
     </div>
     <div style="height:10px"></div>
     <div style="font-size:12px;color:var(--muted)">Your color is derived from your IP.</div>
+
+    <div class="admin-section" id="adminSection" style="display:none;">
+      <div class="panel-title">Admin</div>
+      <div class="admin-panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div style="font-size:13px;color:var(--muted)">Family Friendly</div>
+          <label class="switch"><input type="checkbox" id="familyToggle"><span class="slider"></span></label>
+        </div>
+        <div style="height:8px"></div>
+        <div style="font-size:12px;color:var(--muted)">Temporarily ban by IP (kick):</div>
+        <div class="admin-tools">
+          <select id="userSelect" style="flex:1;background:#0b0b0c;color:var(--text);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:6px 8px;"></select>
+          <select id="banDuration" style="width:130px;background:#0b0b0c;color:var(--text);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:6px 8px;">
+            <option value="0">Kick only</option>
+            <option value="5000">5s</option>
+            <option value="15000">15s</option>
+            <option value="30000">30s</option>
+            <option value="60000">60s</option>
+          </select>
+          <button class="btn" id="kickBtn">Kick</button>
+        </div>
+        <div style="height:8px"></div>
+        <div style="font-size:12px;color:var(--muted)">Message history:</div>
+        <div class="admin-tools">
+          <button class="btn" id="loadHistoryBtn">Load last 200</button>
+        </div>
+      </div>
+
+      <div style="height:10px"></div>
+      <div class="panel-title">Online</div>
+      <div id="userList" class="user-list"></div>
+    </div>
   </aside>
   <section class="content">
     <div class="chat">
@@ -171,9 +224,22 @@
     </div>
   </section>
 </main>
-<footer>
-  Type "AdminPowers1" then "AdminPowers2" back-to-back to unlock admin (hidden).
-</footer>
+<footer></footer>
+
+<!-- Username gate overlay -->
+<div id="gate" style="position:fixed;inset:0;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;z-index:50;">
+  <div style="width:min(96%,480px);background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.6);">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--cheetoh-light)">
+      <div class="logo"></div>
+      Welcome to CheetohService
+    </div>
+    <div style="color:var(--muted);font-size:14px;margin-bottom:12px;">Choose a username to enter the chat.</div>
+    <div style="display:flex;gap:8px;">
+      <input id="gateUsername" maxlength="24" placeholder="Your username" style="flex:1;background:#0b0b0c;color:var(--text);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 14px;" />
+      <button class="btn" id="enterBtn">Enter</button>
+    </div>
+  </div>
+</div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
@@ -185,8 +251,17 @@
   const saveUsername = document.getElementById('saveUsername');
   const selfBadge = document.getElementById('selfBadge');
   const adminBadge = document.getElementById('adminBadge');
+  // admin refs
+  const adminSection = document.getElementById('adminSection');
+  const familyToggle = document.getElementById('familyToggle');
+  const userSelect = document.getElementById('userSelect');
+  const userList = document.getElementById('userList');
+  const banDuration = document.getElementById('banDuration');
+  const kickBtn = document.getElementById('kickBtn');
+  const loadHistoryBtn = document.getElementById('loadHistoryBtn');
 
   let selfUser = { id: null, username: 'Guest', color: '#fff', isAdmin: false };
+  let gateActive = true;
 
   function setSelf(user){
     selfUser = { ...selfUser, ...user };
@@ -217,7 +292,7 @@
       me.style.opacity = .7;
       meta.appendChild(me);
     }
-    if(selfUser.isAdmin && !message.system){
+    if(!message.system && message.isAdmin){
       const badge = document.createElement('span');
       badge.className = 'badge admin';
       badge.textContent = 'admin';
@@ -242,6 +317,13 @@
       delBtn.onclick = () => deleteMessage(message.id);
       actions.appendChild(editBtn);
       actions.appendChild(delBtn);
+      if(selfUser.isAdmin){
+        const censorBtn = document.createElement('button');
+        censorBtn.className = 'linklike';
+        censorBtn.textContent = 'Censor';
+        censorBtn.onclick = () => socket.emit('admin:censor_message', { id: message.id });
+        actions.appendChild(censorBtn);
+      }
     }
 
     wrapper.appendChild(meta);
@@ -289,11 +371,31 @@
   }
 
   function sendMessage(){
+    if(gateActive) return;
     const val = input.value.trim();
     if(!val) return;
     socket.emit('chat:send', val);
     input.value = '';
   }
+  // gate controls
+  const gate = document.getElementById('gate');
+  const gateUsername = document.getElementById('gateUsername');
+  const enterBtn = document.getElementById('enterBtn');
+  function enterChat(){
+    const name = (gateUsername.value || '').trim();
+    if(!name) return;
+    socket.emit('user:set_username', name);
+    gate.style.display = 'none';
+    gateActive = false;
+    input.disabled = false;
+    sendBtn.disabled = false;
+  }
+  enterBtn.onclick = enterChat;
+  gateUsername.addEventListener('keypress', e => { if(e.key === 'Enter') enterChat(); });
+
+  // initially disable composer until name is set
+  input.disabled = true;
+  sendBtn.disabled = true;
 
   sendBtn.onclick = sendMessage;
   input.addEventListener('keypress', e => { if(e.key === 'Enter') sendMessage(); });
@@ -303,14 +405,99 @@
     socket.emit('user:set_username', val);
   };
 
+  // admin UI actions
+  familyToggle?.addEventListener('change', () => {
+    socket.emit('admin:set_family_friendly', familyToggle.checked);
+  });
+  kickBtn?.addEventListener('click', () => {
+    const userId = userSelect.value;
+    const durationMs = Number(banDuration.value || 0);
+    if(userId) socket.emit('admin:kick', { userId, durationMs });
+  });
+  loadHistoryBtn?.addEventListener('click', () => {
+    socket.emit('admin:get_history', { limit: 200 });
+  });
+
+  function refreshPresence(users){
+    // dropdown
+    if(userSelect){
+      userSelect.innerHTML = '';
+      users.forEach(u => {
+        const opt = document.createElement('option');
+        opt.value = u.id; opt.textContent = u.username; opt.style.color = u.color;
+        userSelect.appendChild(opt);
+      });
+    }
+    // list
+    if(userList){
+      userList.innerHTML = '';
+      users.forEach(u => addPresenceEntry(u));
+    }
+  }
+  function addOrUpdatePresence(u){
+    if(userSelect){
+      const opt = [...userSelect.options].find(o => o.value === u.id);
+      if(!opt){
+        const n = document.createElement('option'); n.value = u.id; n.textContent = u.username; n.style.color = u.color; userSelect.appendChild(n);
+      } else {
+        opt.textContent = u.username; opt.style.color = u.color;
+      }
+    }
+    addPresenceEntry(u);
+  }
+  function addPresenceEntry(u){
+    if(!userList) return;
+    let row = userList.querySelector(`[data-id="${u.id}"]`);
+    if(!row){
+      row = document.createElement('div');
+      row.dataset.id = u.id;
+      row.style.display = 'flex';
+      row.style.alignItems = 'center';
+      row.style.justifyContent = 'space-between';
+      row.style.gap = '8px';
+      row.style.padding = '6px 8px';
+      row.style.border = '1px solid rgba(255,255,255,.06)';
+      row.style.borderRadius = '8px';
+      userList.appendChild(row);
+    }
+    row.innerHTML = '';
+    const left = document.createElement('div');
+    left.style.display = 'flex';
+    left.style.alignItems = 'center';
+    left.style.gap = '8px';
+    const swatch = document.createElement('div'); swatch.style.width='10px'; swatch.style.height='10px'; swatch.style.borderRadius='999px'; swatch.style.background=u.color;
+    const name = document.createElement('div'); name.textContent = u.username; name.style.fontSize = '13px';
+    if(u.isAdmin){ const b = document.createElement('span'); b.className='badge admin'; b.textContent='admin'; name.appendChild(b); }
+    left.appendChild(swatch); left.appendChild(name);
+    const right = document.createElement('div');
+    const kick = document.createElement('button'); kick.className='linklike'; kick.textContent='Kick'; kick.onclick = () => { if(userSelect){ userSelect.value = u.id; } if(kickBtn){ kickBtn.click(); } };
+    right.appendChild(kick);
+    row.appendChild(left); row.appendChild(right);
+  }
+  function removePresence(id){
+    if(userSelect){
+      const opt = [...userSelect.options].find(o => o.value === id);
+      if(opt) opt.remove();
+    }
+    if(userList){
+      const row = userList.querySelector(`[data-id="${id}"]`);
+      if(row) row.remove();
+    }
+  }
+
   // socket events
   socket.on('init', (payload) => {
     setSelf(payload.self);
     usernameInput.value = payload.self.username || '';
     renderAll(payload.messages || []);
+    // admin and presence state
+    if(adminSection) adminSection.style.display = payload.self.isAdmin ? 'block' : 'none';
+    if(familyToggle) familyToggle.checked = !!payload.familyFriendly;
+    if(payload.users) refreshPresence(payload.users);
   });
   socket.on('user:update_self', (payload) => {
     setSelf(payload);
+    if(adminSection) adminSection.style.display = payload.isAdmin ? 'block' : 'none';
   });
   socket.on('chat:new', (m) => {
     appendOne(m);
@@ -331,6 +518,17 @@
   socket.on('chat:deleted', ({ id }) => {
     const node = [...messagesEl.children].find(n => n.dataset.id === id);
     if(node) node.remove();
+  });
+  socket.on('presence:join', (u) => addOrUpdatePresence(u));
+  socket.on('presence:update', (u) => addOrUpdatePresence(u));
+  socket.on('presence:leave', ({ id }) => removePresence(id));
+  socket.on('admin:family_friendly', ({ enabled }) => { if(familyToggle) familyToggle.checked = !!enabled; });
+  socket.on('admin:history', (arr) => {
+    messagesEl.innerHTML = '';
+    renderAll(arr);
+  });
+  socket.on('sys:kicked', ({ reason }) => {
+    alert(reason || 'Kicked');
   });
 </script>
 </body>

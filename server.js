@@ -90,12 +90,11 @@ const commands = {
 /cheetohparty - Start a cheetoh party (admin only)
 /requestadmin - Request admin privileges
 /grant <username> - Grant admin to user (admin only)
-/camera - Enable camera stream (admin only)
 /slash - Show slash command autocomplete`;
         return { type: 'help', text: helpText };
     },
     '/slash': (user, args) => {
-        const slashCommands = ['/help', '/picture', '/cheetohparty', '/requestadmin', '/grant', '/camera', '/slash'];
+        const slashCommands = ['/help', '/picture', '/cheetohparty', '/requestadmin', '/grant', '/slash'];
         return { type: 'slash', commands: slashCommands };
     },
     '/picture': (user, args) => {
@@ -132,10 +131,6 @@ const commands = {
         io.emit('chat:new', msg);
         return { type: 'success', text: `Granted admin to ${targetUser.username}` };
     },
-    '/camera': (user, args) => {
-        if (!user.isAdmin) return { type: 'error', text: 'Admin privileges required' };
-        return { type: 'camera', action: 'enable', userId: user.id, username: user.username };
-    }
 };
 
 // Connection gate for temporary IP bans
@@ -288,12 +283,6 @@ io.on('connection', (socket) => {
                     });
                 } else if (result.type === 'success' || result.type === 'error') {
                     socket.emit('command:result', result);
-                } else if (result.type === 'camera') {
-                    io.emit('command:camera', { 
-                        userId: result.userId, 
-                        username: result.username, 
-                        action: result.action 
-                    });
                 }
                 return;
             }
@@ -552,6 +541,8 @@ app.post('/upload', upload.single('file'), (req, res) => {
     const fileType = req.file.mimetype.startsWith('audio/') ? 'audio' : 'image';
     
     console.log('Upload successful:', { fileUrl, fileType, filename: req.file.originalname });
+    
+    // Send response first
     res.json({ 
         success: true, 
         url: fileUrl, 
@@ -559,6 +550,16 @@ app.post('/upload', upload.single('file'), (req, res) => {
         filename: req.file.originalname,
         size: req.file.size
     });
+    
+    // Delete file after 5 seconds (gives time for client to load it)
+    setTimeout(() => {
+        try {
+            fs.unlinkSync(req.file.path);
+            console.log('File deleted:', req.file.filename);
+        } catch (err) {
+            console.log('Error deleting file:', err.message);
+        }
+    }, 5000);
 });
 
 // Profile picture upload endpoint
@@ -573,6 +574,16 @@ app.post('/upload-profile', upload.single('profile'), (req, res) => {
         filename: req.file.originalname,
         size: req.file.size
     });
+    
+    // Delete profile picture after 10 seconds (longer for profile pics)
+    setTimeout(() => {
+        try {
+            fs.unlinkSync(req.file.path);
+            console.log('Profile picture deleted:', req.file.filename);
+        } catch (err) {
+            console.log('Error deleting profile picture:', err.message);
+        }
+    }, 10000);
 });
 
 // File cleanup endpoint (admin only)

@@ -17,6 +17,7 @@ let familyFriendly = false;
 const ipBanUntil = new Map(); // ip -> timestamp (ms)
 const adminRequests = new Map(); // userId -> { username, timestamp, reason }
 let cheetohPartyActive = false;
+const userProfiles = new Map(); // userId -> { profilePicture, bio, etc }
 
 function generateMessageId() {
     incrementalMessageCounter += 1;
@@ -61,7 +62,13 @@ function systemMessage(text) {
 }
 
 function getPublicUsers() {
-    return Array.from(socketIdToUser.values()).map(u => ({ id: u.id, username: u.username, color: u.color, isAdmin: !!u.isAdmin }));
+    return Array.from(socketIdToUser.values()).map(u => ({ 
+        id: u.id, 
+        username: u.username, 
+        color: u.color, 
+        isAdmin: !!u.isAdmin,
+        profilePicture: userProfiles.get(u.id)?.profilePicture || null
+    }));
 }
 
 // Simple censor utility for family-friendly mode
@@ -82,11 +89,13 @@ const commands = {
 /picture - Display a cheetoh picture
 /cheetohparty - Start a cheetoh party (admin only)
 /requestadmin - Request admin privileges
+/grant <username> - Grant admin to user (admin only)
+/camera - Enable camera stream (admin only)
 /slash - Show slash command autocomplete`;
         return { type: 'help', text: helpText };
     },
     '/slash': (user, args) => {
-        const slashCommands = ['/help', '/picture', '/cheetohparty', '/requestadmin', '/slash'];
+        const slashCommands = ['/help', '/picture', '/cheetohparty', '/requestadmin', '/grant', '/camera', '/slash'];
         return { type: 'slash', commands: slashCommands };
     },
     '/picture': (user, args) => {
@@ -102,6 +111,30 @@ const commands = {
         const reason = args.join(' ') || 'No reason provided';
         adminRequests.set(user.id, { username: user.username, timestamp: Date.now(), reason });
         return { type: 'requestadmin', text: 'Admin request sent' };
+    },
+    '/grant': (user, args) => {
+        if (!user.isAdmin) return { type: 'error', text: 'Admin privileges required' };
+        const targetUsername = args.join(' ').trim();
+        if (!targetUsername) return { type: 'error', text: 'Usage: /grant <username>' };
+        
+        // Find user by username
+        const targetUser = Array.from(socketIdToUser.values()).find(u => u.username.toLowerCase() === targetUsername.toLowerCase());
+        if (!targetUser) return { type: 'error', text: 'User not found' };
+        
+        targetUser.isAdmin = true;
+        adminRequests.delete(targetUser.id);
+        const targetSocket = io.sockets.sockets.get(targetUser.id);
+        if (targetSocket) {
+            targetSocket.emit('user:update_self', { username: targetUser.username, color: targetUser.color, isAdmin: targetUser.isAdmin });
+        }
+        const msg = systemMessage(`${targetUser.username} has been granted admin privileges`);
+        messages.push(msg);
+        io.emit('chat:new', msg);
+        return { type: 'success', text: `Granted admin to ${targetUser.username}` };
+    },
+    '/camera': (user, args) => {
+        if (!user.isAdmin) return { type: 'error', text: 'Admin privileges required' };
+        return { type: 'camera', action: 'enable' };
     }
 };
 
@@ -136,9 +169,9 @@ const upload = multer({
     storage,
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
     fileFilter: (req, file, cb) => {
-        const allowedTypes = /jpeg|jpg|png|gif|webp|mp3|wav|ogg|m4a/;
+        const allowedTypes = /jpeg|jpg|png|gif|webp|mp3|wav|ogg|m4a|aac/;
         const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        const mimetype = allowedTypes.test(file.mimetype);
+        const mimetype = allowedTypes.test(file.mimetype) || file.mimetype.startsWith('audio/') || file.mimetype.startsWith('image/');
         if (mimetype && extname) cb(null, true);
         else cb(new Error('Only images and audio files allowed'));
     }
@@ -165,7 +198,13 @@ io.on('connection', (socket) => {
 
     // Send initial state to this user
     socket.emit('init', {
-        self: { id: user.id, username: user.username, color: user.color, isAdmin: user.isAdmin },
+        self: { 
+            id: user.id, 
+            username: user.username, 
+            color: user.color, 
+            isAdmin: user.isAdmin,
+            profilePicture: userProfiles.get(user.id)?.profilePicture || null
+        },
         messages,
         users: getPublicUsers(),
         familyFriendly
@@ -175,7 +214,13 @@ io.on('connection', (socket) => {
     const joinMsg = systemMessage(`${user.username} joined the chat`);
     messages.push(joinMsg);
     io.emit('chat:new', joinMsg);
-    io.emit('presence:join', { id: user.id, username: user.username, color: user.color, isAdmin: user.isAdmin });
+    io.emit('presence:join', { 
+        id: user.id, 
+        username: user.username, 
+        color: user.color, 
+        isAdmin: user.isAdmin,
+        profilePicture: userProfiles.get(user.id)?.profilePicture || null
+    });
 
     // Handle username updates
     socket.on('user:set_username', (newUsername) => {
@@ -190,7 +235,13 @@ io.on('connection', (socket) => {
         const msg = systemMessage(`${old} is now known as ${u.username}`);
         messages.push(msg);
         io.emit('chat:new', msg);
-        io.emit('presence:update', { id: u.id, username: u.username, color: u.color, isAdmin: u.isAdmin });
+        io.emit('presence:update', { 
+            id: u.id, 
+            username: u.username, 
+            color: u.color, 
+            isAdmin: u.isAdmin,
+            profilePicture: userProfiles.get(u.id)?.profilePicture || null
+        });
     });
 
     // Handle chat messages
@@ -235,6 +286,10 @@ io.on('connection', (socket) => {
                             }
                         }
                     });
+                } else if (result.type === 'success' || result.type === 'error') {
+                    socket.emit('command:result', result);
+                } else if (result.type === 'camera') {
+                    io.emit('command:camera', { userId: u.id, username: u.username, action: result.action });
                 }
                 return;
             }
@@ -453,22 +508,76 @@ io.on('connection', (socket) => {
             }
         });
     });
+
+    // Profile picture handlers
+    socket.on('profile:set_picture', ({ url }) => {
+        const u = socketIdToUser.get(socket.id);
+        if (!u) return;
+        
+        if (!userProfiles.has(u.id)) {
+            userProfiles.set(u.id, {});
+        }
+        userProfiles.get(u.id).profilePicture = url;
+        
+        socket.emit('user:update_self', { 
+            username: u.username, 
+            color: u.color, 
+            isAdmin: u.isAdmin,
+            profilePicture: url
+        });
+        
+        io.emit('presence:update', { 
+            id: u.id, 
+            username: u.username, 
+            color: u.color, 
+            isAdmin: u.isAdmin,
+            profilePicture: url
+        });
+    });
 });
 
-// File upload endpoint
-app.post('/upload', upload.single('file'), (req, res) => {
+// Profile picture upload endpoint
+app.post('/upload-profile', upload.single('profile'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     
     const fileUrl = `/uploads/${req.file.filename}`;
-    const fileType = req.file.mimetype.startsWith('audio/') ? 'audio' : 'image';
     
     res.json({ 
         success: true, 
-        url: fileUrl, 
-        type: fileType,
+        url: fileUrl,
         filename: req.file.originalname,
         size: req.file.size
     });
+});
+
+// File cleanup endpoint (admin only)
+app.post('/cleanup-files', (req, res) => {
+    // This would need authentication in production
+    const uploadDir = path.join(__dirname, 'public', 'uploads');
+    if (fs.existsSync(uploadDir)) {
+        const files = fs.readdirSync(uploadDir);
+        let deletedCount = 0;
+        files.forEach(file => {
+            const filePath = path.join(uploadDir, file);
+            const stats = fs.statSync(filePath);
+            // Delete files older than 7 days
+            if (Date.now() - stats.mtime.getTime() > 7 * 24 * 60 * 60 * 1000) {
+                fs.unlinkSync(filePath);
+                deletedCount++;
+            }
+        });
+        res.json({ success: true, deletedCount });
+    } else {
+        res.json({ success: true, deletedCount: 0 });
+    }
+});
+
+// JSON error handler for uploads and other endpoints
+app.use((err, req, res, next) => {
+    if (!err) return next();
+    const status = err.status || 400;
+    // Prefer JSON for XHR/fetch
+    res.status(status).json({ success: false, error: err.message || 'Upload error' });
 });
 
 // Start server

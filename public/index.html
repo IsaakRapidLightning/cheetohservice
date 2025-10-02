@@ -151,6 +151,7 @@
     border: 1px solid rgba(255,255,255,.08);
     border-radius: 10px;
     padding: 12px 14px;
+    min-width: 400px;
   }
   .composer input:disabled { opacity: .5; cursor: not-allowed; }
   .btn:disabled { opacity: .5; cursor: not-allowed; }
@@ -175,6 +176,135 @@
     padding: 8px 12px;
     margin: 4px 0;
     font-size: 13px;
+    color: var(--muted);
+  }
+  .slash-autocomplete {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    background: var(--card);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 4px;
+    z-index: 10;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .slash-item {
+    padding: 6px 8px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .slash-item:hover {
+    background: rgba(255,255,255,.1);
+  }
+  .slash-item.selected {
+    background: var(--cheetoh-orange);
+    color: #111827;
+  }
+  .camera-stream {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(90vw, 640px);
+    height: min(60vh, 480px);
+    background: var(--card);
+    border: 2px solid var(--cheetoh-orange);
+    border-radius: 12px;
+    z-index: 1000;
+    display: none;
+  }
+  .camera-video {
+    width: 100%;
+    height: 100%;
+    border-radius: 10px;
+    object-fit: cover;
+  }
+  .camera-controls {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+    display: flex;
+    gap: 8px;
+  }
+  .camera-btn {
+    background: rgba(0,0,0,.7);
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .typing-indicator {
+    font-style: italic;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+  .reaction-btn {
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 2px 4px;
+    border-radius: 4px;
+  }
+  .reaction-btn:hover {
+    background: rgba(255,255,255,.1);
+  }
+  .reactions {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+  }
+  .profile-picture {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--cheetoh-orange);
+  }
+  .profile-picture-small {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--cheetoh-orange);
+  }
+  .profile-upload {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .profile-upload input[type="file"] {
+    display: none;
+  }
+  .profile-upload-btn {
+    background: linear-gradient(180deg, var(--cheetoh-orange), var(--cheetoh-deep));
+    color: #111827;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 12px;
+  }
+  .storage-info {
+    background: rgba(255,255,255,.03);
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 8px;
+    padding: 8px;
+    margin-top: 8px;
+    font-size: 11px;
     color: var(--muted);
   }
   .cheetoh-party {
@@ -252,6 +382,20 @@
     </div>
     <div style="height:10px"></div>
     <div style="font-size:12px;color:var(--muted)">Your color is derived from your IP.</div>
+    
+    <div style="height:10px"></div>
+    <div class="panel-title">Profile Picture</div>
+    <div class="profile-upload">
+      <img id="profilePicture" class="profile-picture" src="/cheetoh.png" alt="Profile" />
+      <input type="file" id="profileInput" accept="image/*" />
+      <button class="profile-upload-btn" id="profileUploadBtn">Upload</button>
+    </div>
+    
+    <div class="storage-info">
+      <div>📁 Files stored in: public/uploads/</div>
+      <div>🗑️ Auto-cleanup: 7+ days old</div>
+      <div>💾 Storage: Local PC</div>
+    </div>
 
     <div class="admin-section" id="adminSection" style="display:none;">
       <div class="panel-title">Admin</div>
@@ -308,7 +452,10 @@
 <div id="messages"></div>
     </div>
     <div class="composer">
+      <div style="position: relative; flex: 1;">
 <input id="messageInput" autocomplete="off" placeholder="Type your message..."/>
+        <div id="slashAutocomplete" class="slash-autocomplete" style="display: none;"></div>
+      </div>
       <button class="upload-btn" id="uploadBtn" title="Upload file">+</button>
       <input type="file" id="fileInput" class="file-input" accept="image/*,audio/*" />
       <button class="btn" id="sendBtn">Send</button>
@@ -317,7 +464,14 @@
 </main>
 <footer></footer>
 
-<!-- Username gate overlay -->
+<!-- Camera stream overlay -->
+<div id="cameraStream" class="camera-stream">
+  <video id="cameraVideo" class="camera-video" autoplay muted></video>
+  <div class="camera-controls">
+    <button class="camera-btn" id="stopCamera">Stop Camera</button>
+    <button class="camera-btn" id="toggleMic">Mic On</button>
+  </div>
+</div>
 <div id="gate" style="position:fixed;inset:0;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;z-index:50;">
   <div style="width:min(96%,480px);background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.6);">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--cheetoh-light)">
@@ -358,9 +512,20 @@
   const announceBtn = document.getElementById('announceBtn');
   const uploadBtn = document.getElementById('uploadBtn');
   const fileInput = document.getElementById('fileInput');
+  const slashAutocomplete = document.getElementById('slashAutocomplete');
+  const cameraStream = document.getElementById('cameraStream');
+  const cameraVideo = document.getElementById('cameraVideo');
+  const stopCamera = document.getElementById('stopCamera');
+  const toggleMic = document.getElementById('toggleMic');
+  const profilePicture = document.getElementById('profilePicture');
+  const profileInput = document.getElementById('profileInput');
+  const profileUploadBtn = document.getElementById('profileUploadBtn');
 
-  let selfUser = { id: null, username: 'Guest', color: '#fff', isAdmin: false };
+  let selfUser = { id: null, username: 'Guest', color: '#fff', isAdmin: false, profilePicture: null };
   let gateActive = true;
+  let currentStream = null;
+  let micEnabled = true;
+  let autocompleteIndex = -1;
 
   function setSelf(user){
     selfUser = { ...selfUser, ...user };
@@ -368,6 +533,9 @@
     selfBadge.style.background = selfUser.color;
     selfBadge.style.color = '#111827';
     adminBadge.style.display = selfUser.isAdmin ? 'inline-block' : 'none';
+    if(user.profilePicture && profilePicture) {
+      profilePicture.src = user.profilePicture;
+    }
   }
 
   function createMessageEl(message){
@@ -378,6 +546,15 @@
 
     const meta = document.createElement('div');
     meta.className = 'meta';
+    
+    // Profile picture
+    if(message.profilePicture) {
+      const profileImg = document.createElement('img');
+      profileImg.src = message.profilePicture;
+      profileImg.className = 'profile-picture-small';
+      meta.appendChild(profileImg);
+    }
+    
     const name = document.createElement('span');
     name.textContent = message.username;
     name.style.color = message.color || 'var(--muted)';
@@ -536,6 +713,80 @@
     socket.emit('admin:deny_admin', { userId });
   };
   
+  // Slash autocomplete functions
+  function showSlashAutocomplete(value) {
+    const commands = ['/help', '/picture', '/cheetohparty', '/requestadmin', '/grant', '/camera', '/slash'];
+    const filtered = commands.filter(cmd => cmd.toLowerCase().startsWith(value.toLowerCase()));
+    
+    if(filtered.length === 0) {
+      slashAutocomplete.style.display = 'none';
+      return;
+    }
+    
+    slashAutocomplete.innerHTML = '';
+    filtered.forEach((cmd, index) => {
+    const item = document.createElement('div');
+      item.className = 'slash-item';
+      item.textContent = cmd;
+      item.onclick = () => {
+        input.value = cmd + ' ';
+        slashAutocomplete.style.display = 'none';
+        input.focus();
+      };
+      slashAutocomplete.appendChild(item);
+    });
+    
+    slashAutocomplete.style.display = 'block';
+    autocompleteIndex = 0;
+    updateAutocompleteSelection();
+  }
+  
+  function navigateAutocomplete(direction) {
+    if(slashAutocomplete.style.display === 'none') return;
+    const items = slashAutocomplete.querySelectorAll('.slash-item');
+    if(items.length === 0) return;
+    
+    autocompleteIndex += direction;
+    if(autocompleteIndex < 0) autocompleteIndex = items.length - 1;
+    if(autocompleteIndex >= items.length) autocompleteIndex = 0;
+    
+    updateAutocompleteSelection();
+  }
+  
+  function updateAutocompleteSelection() {
+    const items = slashAutocomplete.querySelectorAll('.slash-item');
+    items.forEach((item, index) => {
+      item.classList.toggle('selected', index === autocompleteIndex);
+    });
+  }
+  
+  function selectAutocomplete() {
+    const items = slashAutocomplete.querySelectorAll('.slash-item');
+    if(autocompleteIndex >= 0 && autocompleteIndex < items.length) {
+      input.value = items[autocompleteIndex].textContent + ' ';
+      slashAutocomplete.style.display = 'none';
+      autocompleteIndex = -1;
+      input.focus();
+    }
+  }
+  
+  // Camera streaming functions
+  async function startCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: true, 
+        audio: true 
+      });
+      currentStream = stream;
+      cameraVideo.srcObject = stream;
+      cameraStream.style.display = 'block';
+      micEnabled = true;
+      toggleMic.textContent = 'Mic On';
+    } catch(err) {
+      alert('Camera access denied: ' + err.message);
+    }
+  }
+  
   // Cheetoh party effect
   function startCheetohParty(duration) {
     const partyDiv = document.createElement('div');
@@ -560,12 +811,118 @@
   }
 
   sendBtn.onclick = sendMessage;
-  input.addEventListener('keypress', e => { if(e.key === 'Enter') sendMessage(); });
+  input.addEventListener('keydown', e => { 
+    if(e.key === 'Enter') {
+      if(slashAutocomplete.style.display !== 'none' && autocompleteIndex >= 0) {
+        e.preventDefault();
+        selectAutocomplete();
+      } else {
+        sendMessage();
+      }
+    }
+    if(e.key === 'Tab') {
+      if(slashAutocomplete.style.display !== 'none' && autocompleteIndex >= 0) {
+        e.preventDefault();
+        selectAutocomplete();
+      }
+    }
+    if(e.key === 'Escape') {
+      slashAutocomplete.style.display = 'none';
+      autocompleteIndex = -1;
+    }
+    if(e.key === 'ArrowDown') {
+      e.preventDefault();
+      navigateAutocomplete(1);
+    }
+    if(e.key === 'ArrowUp') {
+      e.preventDefault();
+      navigateAutocomplete(-1);
+    }
+  });
+  
+  input.addEventListener('input', (e) => {
+    const value = e.target.value;
+    if(value.startsWith('/') && value.length > 1) {
+      showSlashAutocomplete(value);
+    } else {
+      slashAutocomplete.style.display = 'none';
+      autocompleteIndex = -1;
+    }
+  });
+  
   saveUsername.onclick = () => {
     const val = usernameInput.value.trim();
     if(!val) return;
     socket.emit('user:set_username', val);
   };
+  
+  // Camera controls
+  stopCamera?.addEventListener('click', () => {
+    if(currentStream) {
+      currentStream.getTracks().forEach(track => track.stop());
+      currentStream = null;
+    }
+    cameraStream.style.display = 'none';
+    socket.emit('camera:stop');
+  });
+  
+  toggleMic?.addEventListener('click', () => {
+    micEnabled = !micEnabled;
+    if(currentStream) {
+      currentStream.getAudioTracks().forEach(track => {
+        track.enabled = micEnabled;
+      });
+    }
+    toggleMic.textContent = micEnabled ? 'Mic On' : 'Mic Off';
+  });
+  
+  // Profile picture upload
+  profileUploadBtn?.addEventListener('click', () => {
+    profileInput.click();
+  });
+  
+  profileInput?.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    
+    const formData = new FormData();
+    formData.append('profile', file);
+    
+    fetch('/upload-profile', {
+      method: 'POST',
+      body: formData
+    })
+    .then(async (res) => {
+      const contentType = res.headers.get('content-type') || '';
+      if(!res.ok) {
+        if(contentType.includes('application/json')){
+          const data = await res.json();
+          throw new Error(data.error || 'Upload failed');
+        } else {
+          const text = await res.text();
+          throw new Error('Upload failed: ' + text.slice(0, 120));
+        }
+      }
+      if(!contentType.includes('application/json')){
+        const text = await res.text();
+        throw new Error('Unexpected response: ' + text.slice(0, 120));
+      }
+      return res.json();
+    })
+    .then(data => {
+      if(data.success) {
+        profilePicture.src = data.url;
+        socket.emit('profile:set_picture', { url: data.url });
+      } else {
+        alert('Upload failed: ' + (data.error || 'Unknown error'));
+      }
+    })
+    .catch(err => {
+      alert('Upload failed: ' + err.message);
+    });
+    
+    profileInput.value = '';
+  });
 
   // admin UI actions
   familyToggle?.addEventListener('change', () => {
@@ -625,7 +982,23 @@
       method: 'POST',
       body: formData
     })
-    .then(res => res.json())
+    .then(async (res) => {
+      const contentType = res.headers.get('content-type') || '';
+      if(!res.ok) {
+        if(contentType.includes('application/json')){
+          const data = await res.json();
+          throw new Error(data.error || 'Upload failed');
+        } else {
+          const text = await res.text();
+          throw new Error('Upload failed: ' + text.slice(0, 120));
+        }
+      }
+      if(!contentType.includes('application/json')){
+        const text = await res.text();
+        throw new Error('Unexpected response: ' + text.slice(0, 120));
+      }
+      return res.json();
+    })
     .then(data => {
       if(data.success) {
         socket.emit('chat:send_file', {
@@ -692,9 +1065,20 @@
     left.style.alignItems = 'center';
     left.style.gap = '8px';
     const swatch = document.createElement('div'); swatch.style.width='10px'; swatch.style.height='10px'; swatch.style.borderRadius='999px'; swatch.style.background=u.color;
+    
+    // Profile picture if available
+    if(u.profilePicture) {
+      const profileImg = document.createElement('img');
+      profileImg.src = u.profilePicture;
+      profileImg.className = 'profile-picture-small';
+      left.appendChild(profileImg);
+    } else {
+      left.appendChild(swatch);
+    }
+    
     const name = document.createElement('div'); name.textContent = u.username; name.style.fontSize = '13px';
     if(u.isAdmin){ const b = document.createElement('span'); b.className='badge admin'; b.textContent='admin'; name.appendChild(b); }
-    left.appendChild(swatch); left.appendChild(name);
+    left.appendChild(name);
     const right = document.createElement('div');
     const kick = document.createElement('button'); kick.className='linklike'; kick.textContent='Kick'; kick.onclick = () => { if(userSelect){ userSelect.value = u.id; } if(kickBtn){ kickBtn.click(); } };
     right.appendChild(kick);
@@ -772,11 +1156,27 @@
       reqDiv.textContent = result.text;
       messagesEl.appendChild(reqDiv);
       messagesEl.scrollTop = messagesEl.scrollHeight;
+    } else if(result.type === 'success') {
+      const successDiv = document.createElement('div');
+      successDiv.className = 'command-help';
+      successDiv.style.color = '#10b981';
+      successDiv.textContent = result.text;
+      messagesEl.appendChild(successDiv);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    } else if(result.type === 'error') {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'command-help';
+      errorDiv.style.color = '#ef4444';
+      errorDiv.textContent = result.text;
+      messagesEl.appendChild(errorDiv);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
     }
   });
   
-  socket.on('command:cheetohparty', ({ duration }) => {
-    startCheetohParty(duration);
+  socket.on('command:camera', ({ userId, username, action }) => {
+    if(action === 'enable' && userId === selfUser.id) {
+      startCamera();
+    }
   });
   
   socket.on('admin:request', ({ userId, username, reason }) => {

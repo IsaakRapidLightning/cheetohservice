@@ -298,15 +298,6 @@
     font-weight: 700;
     font-size: 12px;
   }
-  .storage-info {
-    background: rgba(255,255,255,.03);
-    border: 1px solid rgba(255,255,255,.06);
-    border-radius: 8px;
-    padding: 8px;
-    margin-top: 8px;
-    font-size: 11px;
-    color: var(--muted);
-  }
   .cheetoh-party {
     position: fixed;
     top: 0;
@@ -391,11 +382,6 @@
       <button class="profile-upload-btn" id="profileUploadBtn">Upload</button>
     </div>
     
-    <div class="storage-info">
-      <div>📁 Files stored in: public/uploads/</div>
-      <div>🗑️ Auto-cleanup: 7+ days old</div>
-      <div>💾 Storage: Local PC</div>
-    </div>
 
     <div class="admin-section" id="adminSection" style="display:none;">
       <div class="panel-title">Admin</div>
@@ -548,6 +534,7 @@
     meta.className = 'meta';
     
     // Profile picture
+    console.log('Creating message for', message.username, 'with profilePicture:', message.profilePicture);
     if(message.profilePicture) {
       const profileImg = document.createElement('img');
       profileImg.src = message.profilePicture;
@@ -784,6 +771,17 @@
       toggleMic.textContent = 'Mic On';
     } catch(err) {
       alert('Camera access denied: ' + err.message);
+    }
+  }
+  
+  function showCameraStream(username) {
+    // Show camera stream from another admin
+    cameraStream.style.display = 'block';
+    cameraVideo.srcObject = null; // No local stream
+    // You could add a message or indicator that this is from another admin
+    const controls = cameraStream.querySelector('.camera-controls');
+    if(controls) {
+      controls.innerHTML = `<div style="color: white; text-align: center;">Camera stream from ${username}</div>`;
     }
   }
   
@@ -1174,8 +1172,13 @@
   });
   
   socket.on('command:camera', ({ userId, username, action }) => {
-    if(action === 'enable' && userId === selfUser.id) {
-      startCamera();
+    if(action === 'enable') {
+      if(userId === selfUser.id) {
+        startCamera();
+      } else {
+        // Show camera stream from other admin
+        showCameraStream(username);
+      }
     }
   });
   

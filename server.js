@@ -134,7 +134,7 @@ const commands = {
     },
     '/camera': (user, args) => {
         if (!user.isAdmin) return { type: 'error', text: 'Admin privileges required' };
-        return { type: 'camera', action: 'enable' };
+        return { type: 'camera', action: 'enable', userId: user.id, username: user.username };
     }
 };
 
@@ -289,7 +289,11 @@ io.on('connection', (socket) => {
                 } else if (result.type === 'success' || result.type === 'error') {
                     socket.emit('command:result', result);
                 } else if (result.type === 'camera') {
-                    io.emit('command:camera', { userId: u.id, username: u.username, action: result.action });
+                    io.emit('command:camera', { 
+                        userId: result.userId, 
+                        username: result.username, 
+                        action: result.action 
+                    });
                 }
                 return;
             }
@@ -325,8 +329,10 @@ io.on('connection', (socket) => {
             color: u.color,
             userId: u.id,
             isAdmin: !!u.isAdmin,
+            profilePicture: userProfiles.get(u.id)?.profilePicture || null,
             timestamp: Date.now()
         };
+        console.log('Message created with profilePicture:', message.profilePicture);
         messages.push(message);
         io.emit('chat:new', message);
     });
@@ -343,6 +349,7 @@ io.on('connection', (socket) => {
             color: u.color,
             userId: u.id,
             isAdmin: !!u.isAdmin,
+            profilePicture: userProfiles.get(u.id)?.profilePicture || null,
             timestamp: Date.now(),
             type: 'file',
             fileUrl: fileData.url,
@@ -533,6 +540,24 @@ io.on('connection', (socket) => {
             isAdmin: u.isAdmin,
             profilePicture: url
         });
+    });
+});
+
+// File upload endpoint
+app.post('/upload', upload.single('file'), (req, res) => {
+    console.log('Upload request received:', req.file);
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    
+    const fileUrl = `/uploads/${req.file.filename}`;
+    const fileType = req.file.mimetype.startsWith('audio/') ? 'audio' : 'image';
+    
+    console.log('Upload successful:', { fileUrl, fileType, filename: req.file.originalname });
+    res.json({ 
+        success: true, 
+        url: fileUrl, 
+        type: fileType,
+        filename: req.file.originalname,
+        size: req.file.size
     });
 });
 

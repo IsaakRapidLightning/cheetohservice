@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CheetohService Chat</title>
+<style>
+  body { font-family: Arial; }
+  ul { list-style: none; padding: 0; }
+  li { padding: 5px 0; }
+  #messages { height: 300px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; }
+</style>
+</head>
+<body>
+<h1>CheetohService Chat</h1>
+<div id="messages"></div>
+<input id="messageInput" autocomplete="off" placeholder="Type your message..."/>
+<button onclick="sendMessage()">Send</button>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+  const messagesDiv = document.getElementById('messages');
+  const input = document.getElementById('messageInput');
+
+  socket.on('chat message', msg => {
+    const item = document.createElement('div');
+    item.textContent = msg;
+    messagesDiv.appendChild(item);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  });
+
+  function sendMessage() {
+    if(input.value){
+      socket.emit('chat message', input.value);
+      input.value = '';
+    }
+  }
+
+  input.addEventListener('keypress', e => {
+    if(e.key === 'Enter') sendMessage();
+  });
+</script>
+</body>
+</html>
